@@ -1,0 +1,50 @@
+# CogNito Repo Contract
+# This file defines the rules that CogNito enforces on all code output.
+# All agent output is validated against this contract before execution.
+
+contract:
+  # Error Handling Rules
+  error_handling:
+    pattern: "result"          # result | throw | either
+    require_error_codes: true
+    log_at: "boundary"         # boundary | source | both
+
+  # Test Conventions
+  testing:
+    allow_mocks: false
+    min_branch_coverage: 80
+    test_style: "behavioral"   # behavioral | unit | integration
+
+  # Forbidden Patterns
+  forbidden:
+    types: ["any"]
+    apis: ["console.log", "fs.readFileSync"]
+    patterns: ["default export"]
+
+  # Architecture Constraints
+  architecture:
+    di_only: true
+    max_nesting: 3
+    no_circular_imports: true
+
+# Scope Defaults
+scope_defaults:
+  max_files: 10
+  max_loc: 500
+  require_approval_for_expansion: true
+
+# Work Notes Configuration
+work_notes:
+  mandatory_fields:
+    - intent
+    - hypothesis
+    - plan
+    - scope
+    - assumptions
+    - risks
+  optional_fields:
+    - changes
+    - tests
+    - metrics
+    - decision_log
+    - next_steps
