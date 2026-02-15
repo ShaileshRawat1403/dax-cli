@@ -16,6 +16,35 @@ async function run(args: string[]) {
   return { code, stdout, stderr };
 }
 
+async function runStream(
+  args: string[],
+  onChunk: (chunk: string) => void,
+): Promise<{ code: number; stderr: string; sawOutput: boolean }> {
+  const proc = Bun.spawn(args, {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: process.env,
+  });
+  const reader = proc.stdout?.getReader();
+  const decoder = new TextDecoder();
+  let sawOutput = false;
+
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if (!chunk) continue;
+      sawOutput = true;
+      onChunk(chunk);
+    }
+  }
+
+  const code = await proc.exited;
+  const stderr = (await new Response(proc.stderr).text()).trim();
+  return { code, stderr, sawOutput };
+}
+
 export class GeminiCliProvider {
   name = "gemini-cli";
   private model: string;
@@ -52,19 +81,42 @@ export class GeminiCliProvider {
 
   async *stream(
     messages: Message[],
-    tools?: Tool[],
-    config?: LLMConfig,
+    _tools?: Tool[],
+    _config?: LLMConfig,
   ): AsyncGenerator<LLMResponse> {
-    const out = await this.complete(messages, tools, config);
-    if (!out.content) {
-      yield { content: "", tool_calls: out.tool_calls, usage: out.usage };
-      return;
+    const cmd = Bun.which("gemini");
+    if (!cmd) {
+      throw new Error("Gemini CLI is not installed. Install Gemini CLI and run '/connect'.");
     }
-    for (let i = 0; i < out.content.length; i += 120) {
-      yield { content: out.content.slice(i, i + 120) };
+
+    const p = prompt(messages);
+    const tries = [
+      [cmd, "-m", this.model, "--stream", "-p", p],
+      [cmd, "-m", this.model, "--stream", "--prompt", p],
+      [cmd, "-m", this.model, "-p", p],
+      [cmd, "-m", this.model, "--prompt", p],
+    ];
+
+    let lastError = "Unknown Gemini CLI error";
+
+    for (const args of tries) {
+      const chunks: string[] = [];
+      const out = await runStream(args, (chunk) => {
+        chunks.push(chunk);
+      });
+
+      if (out.code === 0 && out.sawOutput) {
+        for (const chunk of chunks) {
+          if (chunk) yield { content: chunk };
+        }
+        return;
+      }
+
+      if (out.code !== 0) {
+        lastError = out.stderr || lastError;
+      }
     }
-    if (out.tool_calls?.length) {
-      yield { content: "", tool_calls: out.tool_calls };
-    }
+
+    throw new Error(`Gemini CLI auth/inference failed: ${lastError}`);
   }
 }
