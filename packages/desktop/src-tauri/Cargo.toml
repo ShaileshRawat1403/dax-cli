@@ -1,0 +1,21 @@
+[package]
+name = "cognito-desktop"
+version = "1.0.0"
+description = "CogNito - Decision-aware AI coding agent"
+authors = ["CogNito Team"]
+license = "MIT"
+repository = "https://github.com/AnomalyCo/cognito"
+edition = "2021"
+rust-version = "1.70"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.5", features = ["dialog-all", "fs-all", "notification-all", "os-all", "path-all", "process-exit", "process-relaunch", "shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

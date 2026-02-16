@@ -1,0 +1,21 @@
+{
+  "name": "cognito-desktop",
+  "version": "1.0.0",
+  "description": "CogNito Desktop App",
+  "type": "module",
+  "scripts": {
+    "dev": "cd ../app && npx vite --port 5173",
+    "build": "cd ../app && npx vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.0",
+    "@tauri-apps/cli": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

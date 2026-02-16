@@ -483,6 +483,71 @@ export class Agent {
     return typeof this.config.provider.stream === "function"
   }
 
+  private planningConfig() {
+    const base = { ...this.config.llmConfig, temperature: 0.3 }
+    const name = this.config.provider.name || ""
+    if (name === "gemini" || name === "gemini-cli") {
+      const cap = Math.min(base.max_tokens || 700, 700)
+      return { ...base, temperature: 0.2, max_tokens: cap }
+    }
+    const cap = Math.min(base.max_tokens || 1200, 1200)
+    return { ...base, max_tokens: cap }
+  }
+
+  async streamPlanningThought(
+    taskDescription: string,
+    onChunk: (chunk: string) => void,
+    options?: { firstTokenTimeoutMs?: number; overallTimeoutMs?: number; onFirstToken?: () => void },
+  ): Promise<void> {
+    if (typeof this.config.provider.stream !== "function") return
+    const prompt = [
+      "Return planning preflight as plain bullets.",
+      "Task: " + taskDescription,
+      "Rules:",
+      "- max 3 bullets",
+      "- no tools",
+      "- no markdown",
+      "- no repetition",
+    ].join("\n")
+    const msgs = await this.contextMessages([{ role: "user", content: prompt }])
+    const firstTokenTimeout = options?.firstTokenTimeoutMs || 2000
+    const overallTimeout = options?.overallTimeoutMs || 10000
+    const started = Date.now()
+    let sawToken = false
+
+    try {
+      const stream = this.config.provider.stream(msgs, undefined, this.planningConfig())
+      const it = stream[Symbol.asyncIterator]()
+      while (true) {
+        const elapsed = Date.now() - started
+        const budget = sawToken
+          ? Math.max(1, overallTimeout - elapsed)
+          : Math.min(firstTokenTimeout, Math.max(1, overallTimeout - elapsed))
+        const next = await Promise.race([
+          it.next(),
+          Bun.sleep(budget).then(() => ({ done: true as const, value: undefined })),
+        ])
+        if (next.done) {
+          await it.return?.(undefined)
+          return
+        }
+        if (!next.value?.content) continue
+        if (!sawToken) {
+          sawToken = true
+          options?.onFirstToken?.()
+        }
+        onChunk(next.value.content)
+        if (Date.now() - started >= overallTimeout) {
+          await it.return?.(undefined)
+          return
+        }
+      }
+    } catch {
+      return
+    }
+  }
+
+
   async startTask(taskDescription: string): Promise<void> {
     await this.ensureProject()
     // Add user message
@@ -508,7 +573,7 @@ export class Agent {
     const response = await this.config.provider.complete(
       msgs,
       undefined,
-      { ...this.config.llmConfig, temperature: 0.3 },
+      this.planningConfig(),
     )
 
     try {
@@ -739,6 +804,13 @@ export class Agent {
   async chatStream(
     message: string,
     onChunk: (chunk: string) => void,
+    options?: {
+      firstTokenTimeoutMs?: number
+      overallTimeoutMs?: number
+      onFirstToken?: () => void
+      onTimeout?: (kind: "first_token" | "overall") => void
+      onFallback?: () => void
+    },
   ): Promise<void> {
     const applied = await this.applyPmCommands(message)
     if (applied) {
@@ -779,15 +851,47 @@ export class Agent {
       return
     }
 
+    const firstTokenTimeout = options?.firstTokenTimeoutMs || 8000
+    const overallTimeout = options?.overallTimeoutMs || 45000
+    const started = Date.now()
     let content = ""
     let calls: ToolCall[] | undefined
+    let sawToken = false
+    let timeoutKind: "first_token" | "overall" | undefined
+
     try {
-      for await (const chunk of this.config.provider.stream(
+      const stream = this.config.provider.stream(
         msgs,
         undefined,
         this.config.llmConfig,
-      )) {
+      )
+      const it = stream[Symbol.asyncIterator]()
+      while (true) {
+        const elapsed = Date.now() - started
+        const remaining = Math.max(1, overallTimeout - elapsed)
+        const budget = sawToken ? remaining : Math.min(firstTokenTimeout, remaining)
+        const next = await Promise.race<IteratorResult<{ content: string; tool_calls?: ToolCall[] }> | { timeout: true }>([
+          it.next() as Promise<IteratorResult<{ content: string; tool_calls?: ToolCall[] }>>,
+          Bun.sleep(budget).then(() => ({ timeout: true as const })),
+        ])
+
+        if ("timeout" in next) {
+          timeoutKind = sawToken ? "overall" : "first_token"
+          await it.return?.(undefined)
+          throw new Error(`stream timeout: ${timeoutKind}`)
+        }
+
+        if (next.done) {
+          await it.return?.(undefined)
+          break
+        }
+
+        const chunk = next.value
         if (chunk.content) {
+          if (!sawToken) {
+            sawToken = true
+            options?.onFirstToken?.()
+          }
           content += chunk.content
           onChunk(chunk.content)
         }
@@ -796,6 +900,10 @@ export class Agent {
         }
       }
     } catch {
+      if (timeoutKind) {
+        options?.onTimeout?.(timeoutKind)
+      }
+      options?.onFallback?.()
       const response = await this.config.provider.complete(
         msgs,
         undefined,
@@ -821,7 +929,6 @@ export class Agent {
       toolCalls: calls,
     })
   }
-
   updateScope(scope: { files: string[]; maxFiles: number; maxLoc: number }) {
     this.config.scope = scope
     if (this.workNotes) {

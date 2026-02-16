@@ -1,25 +1,61 @@
 {
-  "name": "cognito",
-  "description": "CogNito - Decision-aware AI coding agent for professional developers",
+  "name": "dax-cli",
   "type": "module",
   "version": "1.0.0",
   "license": "MIT",
+  "bin": {
+    "dax": "./src/cli/main.ts",
+    "cognito": "./src/cli/main.ts"
+  },
   "scripts": {
-    "dev": "vite",
-    "dev:sandbox": "wrangler pages dev dist --ip 0.0.0.0 --port 3000",
-    "build": "vite build",
-    "preview": "wrangler pages dev dist",
-    "deploy": "npm run build && wrangler pages deploy dist",
-    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name cognito",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "start": "./start.sh",
+    "start:api": "bun src/server.ts",
+    "start:api:legacy": "bun src/index.tsx",
+    "start:web": "cd packages/app && npx vite --port 5173",
+    "start:mcp": "bun src/mcp/server.ts",
+    "dev": "./start.sh",
+    "dev:api": "bun src/server.ts",
+    "dev:api:legacy": "bun src/index.tsx",
+    "dev:web": "cd packages/app && npx vite --port 5173",
+    "build": "cd packages/app && npx vite build",
+    "cli": "bun src/cli/main.ts",
+    "cli:interactive": "bun src/cli/main.ts -i",
+    "test": "bun test",
+    "typecheck": "npm run typecheck:server && npm run typecheck:app",
+    "typecheck:server": "bunx tsc --noEmit -p tsconfig.json",
+    "typecheck:app": "npm --prefix packages/app run typecheck",
+    "release:check": "npm run typecheck && npm run test && npm run build",
+    "setup": "npm install && cd packages/app && npm install",
+    "clean": "rm -rf node_modules packages/app/node_modules packages/app/dist packages/desktop/node_modules cognito.db dax.db",
+    "preview": "npm run build && wrangler pages dev packages/app/dist",
+    "deploy": "npm run build && wrangler pages deploy packages/app/dist",
+    "db:migrate": "bun src/db/migrate.ts",
+    "db:seed": "bun src/db/seed.ts",
+    "db:generate": "drizzle-kit generate:sqlite",
+    "cron:cleanup": "bun src/cron/cleanup.ts",
+    "verify": "bun src/verify-subscriptions.ts",
+    "verify:verbose": "bun src/verify-subscriptions.ts --verbose",
+    "verify:auth": "bun src/verify-subscriptions.ts --auth-test --verbose",
+    "bridge:dev": "bun bridges/subscription-bridge/server.ts",
+    "desktop:dev": "cd packages/desktop && npm run tauri:dev",
+    "desktop:build": "cd packages/desktop && npm run tauri:build",
+    "desktop:setup": "cd packages/desktop && npm install"
   },
   "dependencies": {
-    "hono": "^4.11.9"
+    "@hono/zod-validator": "^0.2.2",
+    "better-sqlite3": "^11.1.2",
+    "drizzle-orm": "^0.45.1",
+    "google-auth-library": "^9.7.0",
+    "hono": "^4.5.1",
+    "open": "^10.1.0",
+    "yaml": "^2.8.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@hono/vite-build": "^1.2.0",
-    "@hono/vite-dev-server": "^0.18.2",
-    "vite": "^6.3.5",
-    "wrangler": "^4.4.0"
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/bun": "^1.3.8",
+    "concurrently": "^8.2.2",
+    "drizzle-kit": "^0.23.0",
+    "wrangler": "^3.67.0"
   }
 }

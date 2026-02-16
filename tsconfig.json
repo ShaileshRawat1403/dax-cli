@@ -5,11 +5,28 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
-    "lib": [
-      "ESNext"
-    ],
-    "types": ["vite/client"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["bun"],
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
   },
+  "include": [
+    "src/server.ts",
+    "src/index.tsx",
+    "src/config.ts",
+    "src/data.ts",
+    "src/rate-limit.ts",
+    "src/verify-subscriptions.ts",
+    "src/agent/**/*.ts",
+    "src/auth.ts",
+    "src/auth/**/*.ts",
+    "src/cli/main.ts",
+    "src/cli/control.ts",
+    "src/db/**/*.ts",
+    "src/llm/**/*.ts",
+    "src/oauth/**/*.ts",
+    "src/tools/**/*.ts",
+    "src/websocket/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "src/llm/registry.ts"]
 }

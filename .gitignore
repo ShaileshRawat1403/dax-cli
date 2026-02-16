@@ -13,6 +13,9 @@ pids
 *.pid
 *.seed
 *.pid.lock
+cognito.db
+cognito.db-shm
+cognito.db-wal
 
 # dotenv environment variables
 .env
@@ -40,3 +43,9 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Local virtualenv
+venv/
+
+# Local CLI history/cache
+.cognito/history.txt

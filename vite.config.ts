@@ -1,14 +1,16 @@
-import build from '@hono/vite-build/cloudflare-pages'
-import devServer from '@hono/vite-dev-server'
-import adapter from '@hono/vite-dev-server/cloudflare'
-import { defineConfig } from 'vite'
+import { defineConfig } from "vite";
+import solid from "vite-plugin-solid";
 
 export default defineConfig({
-  plugins: [
-    build(),
-    devServer({
-      adapter,
-      entry: 'src/index.tsx'
-    })
-  ]
-})
+  plugins: [solid()],
+  server: {
+    port: 3000, // Frontend runs on port 3000
+    proxy: {
+      // Proxy /api requests to the backend server
+      "/api": {
+        target: "http://localhost:4096", // Backend API server
+        changeOrigin: true,
+      },
+    },
+  },
+});

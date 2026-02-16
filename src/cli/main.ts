@@ -24,7 +24,21 @@ import { GeminiCliProvider } from "../agent/gemini-cli.js";
 import { ClaudeCliProvider } from "../agent/claude-cli.js";
 import { resolveFallbackProvider } from "./fallback.js";
 import { isPolicyName, policyConfig, type PolicyName } from "./policy.js";
-import { clearGate, createUIState, setGate, setState, setTool } from "./uiState.js";
+import {
+  clearGate,
+  createUIState,
+  setGate,
+  setState,
+  setThinkingMode,
+  setTool,
+  type ExecutionPhase,
+  type ThinkingMode,
+} from "./uiState.js";
+import { buildThinkingView } from "./phaseController.js";
+import { renderThinkingDelta, renderThinkingPanel } from "./renderThinking.js";
+import { createTelemetryBus } from "./telemetryBus.js";
+import { thinkingPolicy } from "./thinkingPolicy.js";
+import type { TelemetryEvent } from "./telemetry.js";
 import { warnLegacyEnvOnce } from "./migrations.js";
 import { getScopeTracker } from "../tools/validation.js";
 import type { ToolCall } from "../llm/types.js";
@@ -56,6 +70,8 @@ const ASSISTANT_NAME = env("DAX_ASSISTANT_NAME", "COGNITO_ASSISTANT_NAME", "DAX"
 const SHOW_AUTO_NOTES = env("DAX_SHOW_AUTO_NOTES", "COGNITO_SHOW_AUTO_NOTES", "false").toLowerCase() === "true";
 const UI_DENSE = env("DAX_UI_DENSE", "COGNITO_UI_DENSE", "false").toLowerCase() === "true";
 const SCORE_PATH = env("DAX_SCORECARD_PATH", "COGNITO_SCORECARD_PATH") || join(process.cwd(), ".dax", "provider-scorecard.json");
+const STREAM_PLAN_PREFLIGHT = env("DAX_STREAM_PLAN_PREFLIGHT", "COGNITO_STREAM_PLAN_PREFLIGHT", "auto").toLowerCase();
+const THINKING_MODE_ENV = env("DAX_THINKING_MODE", "COGNITO_THINKING_MODE", "").toLowerCase();
 const health = new Map<string, { value: string; ts: number }>();
 let history: string[] | null = null;
 let apiProcess: Bun.Subprocess | null = null;
@@ -64,9 +80,25 @@ let policy: PolicyName = isPolicyName((env("DAX_POLICY", "COGNITO_POLICY", "")).
   : "balanced";
 let scorecard: Record<string, { ok: number; err: number; fallback: number; last_ok?: string; last_err?: string }> | null = null;
 const ui = createUIState();
+let emitTelemetry: ((event: TelemetryEvent) => void) | null = null;
 
 function isAdapterProvider(name: string) {
   return ["chatgpt-codex", "gemini-cli", "claude-cli", "ollama", "phi3"].includes(name);
+}
+
+function shouldStreamPlanPrefight(providerName: string) {
+  if (STREAM_PLAN_PREFLIGHT === "true") return true;
+  if (STREAM_PLAN_PREFLIGHT === "false") return false;
+  return providerName !== "gemini";
+}
+
+function isThinkingMode(value: string): value is ThinkingMode {
+  return value === "minimal" || value === "verbose" || value === "off";
+}
+
+function defaultThinkingMode(providerName: string): ThinkingMode {
+  if (providerName === "gemini" || providerName === "gemini-cli") return "minimal";
+  return "verbose";
 }
 
 function providerNames() {
@@ -98,6 +130,8 @@ function commandNames() {
     "/rao",
     "/pm",
     "/notes",
+    "/thinking",
+    "/timing",
     "/help",
     "/clear",
     "/exit",
@@ -657,6 +691,11 @@ Environment Variables:
   DAX_CLI_STATUS_TIMEOUT_MS (legacy: COGNITO_CLI_STATUS_TIMEOUT_MS) Timeout for external CLI status probes (default: 1200)
   DAX_HISTORY_PATH (legacy: COGNITO_HISTORY_PATH)     Prompt history file path (default: ./.dax/history.txt)
   DAX_HISTORY_LIMIT (legacy: COGNITO_HISTORY_LIMIT)    Max prompt history entries (default: 200)
+  DAX_STREAM_PLAN_PREFLIGHT (legacy: COGNITO_STREAM_PLAN_PREFLIGHT) Planning preflight stream: true|false|auto (default: auto; off for Gemini API)
+  DAX_THINKING_MODE (legacy: COGNITO_THINKING_MODE) Narration mode: minimal|verbose|off (default: provider-aware)
+  DAX_DEBUG_STREAM (legacy: COGNITO_DEBUG_STREAM) Stream event debug summaries (default: false)
+  DAX_DEBUG_STREAM_RAW (legacy: COGNITO_DEBUG_STREAM_RAW) Include truncated redacted raw events (default: false)
+  DAX_DEBUG_STREAM_MAX_EVENTS (legacy: COGNITO_DEBUG_STREAM_MAX_EVENTS) Max debug events logged (default: 3)
   ANTHROPIC_API_KEY      Anthropic API key
   GOOGLE_ACCESS_TOKEN    Google/Gemini Access Token
   GOOGLE_CLIENT_ID       Google OAuth Client ID
@@ -1054,7 +1093,7 @@ async function statusLineText(
       : "warn";
   const cwd = options.workDir.split("/").filter(Boolean).slice(-1)[0] || options.workDir;
   const sep = dim(" • ");
-  return `${dim("─")} ${accent("provider")}:${bold(provider.name)}${sep}${accent("model")}:${bold(model)}${sep}${accent("mode")}:${bold(options.mode)}${sep}${accent("policy")}:${bold(policy)}${sep}${accent("state")}:${bold(ui.sessionState)}${sep}${accent("gate")}:${bold(gate)}${sep}${accent("auth")}:${authColor}${sep}${accent("cwd")}:${dim(cwd)} ${dim("─")}`;
+  return `${dim("─")} ${accent("provider")}:${bold(provider.name)}${sep}${accent("model")}:${bold(model)}${sep}${accent("mode")}:${bold(options.mode)}${sep}${accent("policy")}:${bold(policy)}${sep}${accent("thinking")}:${bold(ui.thinkingMode)}${sep}${accent("phase")}:${bold(ui.phase)}${sep}${accent("state")}:${bold(ui.sessionState)}${sep}${accent("gate")}:${bold(gate)}${sep}${accent("auth")}:${authColor}${sep}${accent("cwd")}:${dim(cwd)} ${dim("─")}`;
 }
 
 function renderPinnedStatus(line: string) {
@@ -1080,10 +1119,14 @@ async function printStatusLine(
 
 function startDaxSpinner(label: string) {
   if (!process.stdout.isTTY) return () => {};
-  const frames = ["◴", "◷", "◶", "◵"];
+  const colors = ["\x1b[38;5;51m", "\x1b[38;5;45m", "\x1b[38;5;39m", "\x1b[38;5;86m"];
   let i = 0;
   const paint = () => {
-    process.stdout.write(`\r${accent(bold("DAX"))} ${dim(frames[i % frames.length])} ${dim(label)}`);
+    const c0 = colors[(i + 0) % colors.length];
+    const c1 = colors[(i + 1) % colors.length];
+    const c2 = colors[(i + 2) % colors.length];
+    const brand = c0 + "\x1b[1mD\x1b[0m" + "\x1b[38;5;243m·\x1b[0m" + c1 + "\x1b[1mA\x1b[0m" + "\x1b[38;5;243m·\x1b[0m" + c2 + "\x1b[1mX\x1b[0m";
+    process.stdout.write("\r" + brand + " \x1b[38;5;250m" + label + "\x1b[0m");
     i++;
   };
   paint();
@@ -1184,6 +1227,69 @@ function renderRich(text: string) {
   }
 }
 
+function createLiveRichRenderer() {
+  let code = false;
+  let lang = "";
+  let pending = "";
+
+  const writeLine = (raw: string, nl = true) => {
+    const line = raw.replace(/\r$/, "");
+    if (line.trim().startsWith("```")) {
+      code = !code;
+      lang = code ? line.trim().slice(3).trim().toLowerCase() : "";
+      const marker = code ? dim(`┌ code${lang ? ` (${lang})` : ""}`) : dim("└ end");
+      process.stdout.write(marker + (nl ? "\n" : ""));
+      return;
+    }
+    if (code) {
+      process.stdout.write(`${dim("│")} ${colorCode(line, lang)}` + (nl ? "\n" : ""));
+      return;
+    }
+    if (/^#{1,6}\s+/.test(line)) {
+      process.stdout.write(`${bold(accent(styleInline(line.replace(/^#{1,6}\s+/, ""))))}` + (nl ? "\n" : ""));
+      return;
+    }
+    if (/^(\s*[-*]\s+)/.test(line)) {
+      process.stdout.write(`${accent("•")} ${styleInline(line.replace(/^(\s*[-*]\s+)/, ""))}` + (nl ? "\n" : ""));
+      return;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {
+      process.stdout.write(styleInline(line) + (nl ? "\n" : ""));
+      return;
+    }
+    process.stdout.write(styleInline(line) + (nl ? "\n" : ""));
+  };
+
+  const flushSoft = () => {
+    if (code) return;
+    if (pending.length < 180) return;
+    const points = [pending.lastIndexOf(". "), pending.lastIndexOf("! "), pending.lastIndexOf("? "), pending.lastIndexOf("; ")];
+    const cut = Math.max(...points);
+    if (cut < 60) return;
+    const head = pending.slice(0, cut + 1);
+    pending = pending.slice(cut + 1).trimStart();
+    writeLine(head, true);
+  };
+
+  return {
+    write(chunk: string) {
+      pending += chunk;
+      while (true) {
+        const i = pending.indexOf("\n");
+        if (i < 0) break;
+        const line = pending.slice(0, i);
+        pending = pending.slice(i + 1);
+        writeLine(line, true);
+      }
+      flushSoft();
+    },
+    end() {
+      if (!pending) return;
+      writeLine(pending, false);
+      pending = "";
+    },
+  };
+}
 function renderToolOutput(output: string) {
   if (/^diff --git|^@@|^\+\+\+|^---/m.test(output)) {
     renderDiff(output);
@@ -1232,6 +1338,8 @@ function printCommandHelp() {
   console.log(`  ${kbd("/provider")}     Switch provider`);
   console.log(`  ${kbd("/model <id>")}   Set model for current session`);
   console.log(`  ${kbd("/mode <build|plan>")}`);
+  console.log(`  ${kbd("/thinking <minimal|verbose|off|show|reset>")} Set narration mode`);
+  console.log(`  ${kbd("/timing <on|off>")} Show telemetry timings`);
   console.log(`  ${kbd("/status")}       Show provider/model/auth status`);
   console.log(`  ${kbd("/doctor")}       Run provider preflight diagnostics`);
   console.log(`  ${kbd("/policy <safe|balanced|aggressive>")} Set orchestration policy`);
@@ -1292,15 +1400,18 @@ function renderToolResults(
         targets,
         started_at: Date.now(),
       })
-      console.log(dim(`→ tool: ${call.function.name}${targets.length > 0 ? ` ${targets.join(", ")}` : ""}`))
+      console.log(accent("Action") + ": " + call.function.name + (targets.length > 0 ? ` ${targets.join(", ")}` : ""))
+      emitTelemetry?.({ type: "tool.start", ts: Date.now(), name: call.function.name, targets })
     }
     if (result.success) {
-      console.log(ok("✓ ok"));
+      emitTelemetry?.({ type: "tool.ok", ts: Date.now(), name: call?.function.name || "tool" })
+      console.log(ok("Result: success"));
       renderToolOutput(result.output);
       if (!UI_DENSE) console.log("");
       continue;
     }
-    console.log(err(`✗ failed: ${result.error || "Unknown tool error"}`));
+    emitTelemetry?.({ type: "tool.fail", ts: Date.now(), name: call?.function.name || "tool", error: result.error || "Unknown tool error" })
+    console.log(err(`Result: failed (${result.error || "Unknown tool error"})`));
   }
 }
 
@@ -1323,7 +1434,7 @@ async function promptGateResolution(gate: { blocked: boolean; warnings: { kind: 
     return `${shared.join("/")}/**`
   }
   const print = () => {
-    console.log(`\n${warn("Approval required before execution:")}`)
+    console.log(`\n${warn("Gate: approval required before execution")}`)
     gate.warnings.forEach((line) => console.log(`- [${line.code}] ${line.message} (subject: ${line.subject})`))
     const options = gate.blocked
       ? "r=reject  v=view args  Esc=cancel"
@@ -1514,6 +1625,8 @@ async function commandPalette(seed?: string) {
     { label: "🧬 Set Model", value: "/model", raw: "model set" },
     { label: "🏗️  Build Mode", value: "/mode build", raw: "mode build" },
     { label: "🧐 Plan Mode", value: "/mode plan", raw: "mode plan" },
+    { label: "🧠 Thinking Mode", value: "/thinking", raw: "thinking minimal verbose off show reset narration" },
+    { label: "⏱ Timing", value: "/timing on", raw: "timing on off" },
     { label: "❓ Help", value: "/help", raw: "help commands" },
     { label: "🧹 Clear", value: "/clear", raw: "clear" },
     { label: "❌ Exit", value: "/exit", raw: "exit quit" },
@@ -1573,6 +1686,57 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
   trace?.("provider resolved");
   console.log(`Using provider: ${provider.name}${UI_DENSE ? "" : "\n"}`);
 
+  const bus = createTelemetryBus(240)
+  const envMode = isThinkingMode(THINKING_MODE_ENV) ? THINKING_MODE_ENV : null
+  let overrideMode: ThinkingMode | null = null
+  let timing = false
+  let rendered = new Set<string>()
+  let renderQueued = false
+  const renderTelemetry = (events: TelemetryEvent[]) => {
+    const view = buildThinkingView(events, ui.thinkingMode)
+    ui.phase = view.phase
+    if (ui.thinkingMode === "off") return
+    const lines = renderThinkingDelta(view, rendered)
+    if (lines.length === 0) return
+    if (process.stdout.isTTY) process.stdout.write("\r\x1b[2K")
+    console.log(lines.join("\n"))
+  }
+  const scheduleTelemetry = () => {
+    if (renderQueued) return
+    renderQueued = true
+    queueMicrotask(() => {
+      renderQueued = false
+      renderTelemetry(bus.list())
+    })
+  }
+  const syncThinkingMode = (providerName: string) => {
+    const mode = overrideMode || envMode || defaultThinkingMode(providerName)
+    setThinkingMode(ui, mode)
+    rendered = new Set()
+    scheduleTelemetry()
+  }
+  bus.subscribe(() => scheduleTelemetry())
+  const emit = (event: TelemetryEvent) => {
+    bus.emit(event)
+  }
+  const enter = (phase: ExecutionPhase) => emit({ type: "phase.enter", ts: Date.now(), phase })
+  const step = (phase: ExecutionPhase, text: string) => emit({ type: "phase.step", ts: Date.now(), phase, text })
+  const gateTelemetry = (pending: { blocked: boolean; warnings: { code: string; subject: string }[] }) => {
+    pending.warnings.slice(0, 3).forEach((warning) => {
+      emit({
+        type: pending.blocked ? "gate.blocked" : "gate.warn",
+        ts: Date.now(),
+        code: warning.code,
+        subject: warning.subject,
+      })
+    })
+    step("verification", pending.blocked ? "policy check: blocked" : "policy check: approval required")
+  }
+
+  syncThinkingMode(provider.name)
+  emitTelemetry = emit
+  enter("understanding")
+
   // Use local-optimized registry for local models
   const useLocalTools = options.local || provider.name === "ollama";
   const tools = useLocalTools ? createLocalRegistry() : createToolRegistry();
@@ -1594,7 +1758,28 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
 
   if (options.task) {
     console.log(`📝 Task: ${options.task}${UI_DENSE ? "" : "\n"}`);
+    step("discovery", "scanning src/cli")
+    if (ui.thinkingMode === "verbose" && shouldStreamPlanPrefight(provider.name) && agent.canStream() && agent.streamPlanningThought) {
+      const preStart = Date.now()
+      let firstTokenMs = -1
+      await agent.streamPlanningThought(options.task, () => {
+        if (firstTokenMs >= 0) return
+        firstTokenMs = Date.now() - preStart
+        step("planning", "preflight ready")
+      }, {
+        firstTokenTimeoutMs: 2000,
+        overallTimeoutMs: 9000,
+      })
+      const preMs = Date.now() - preStart
+      if (firstTokenMs < 0) step("planning", "preflight skipped (timeout)")
+      if (timing) emit({ type: "timing", ts: Date.now(), phase: "planning", stage: "preflight", duration_ms: preMs, first_token_ms: firstTokenMs >= 0 ? firstTokenMs : undefined })
+    }
+    step("planning", "drafting plan");
+    const planStart = Date.now()
     await agent.startTask(options.task);
+    const planMs = Date.now() - planStart
+    step("planning", `work notes created (${planMs}ms)`);
+    if (timing) emit({ type: "timing", ts: Date.now(), phase: "planning", stage: "work_notes", duration_ms: planMs })
 
     // Show work notes
     const notes = agent.getWorkNotes();
@@ -1623,9 +1808,11 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
       while (hasMore && iteration < maxIterations) {
         iteration++;
         setState(ui, "running")
+        step("execution", "task loop running")
         hasMore = await agent.continue();
         const pending = agent.getPendingGate?.()
         if (pending) {
+          gateTelemetry(pending)
           setGate(ui, pending)
           setState(ui, "waiting_approval")
           const action = await promptGateResolution(pending)
@@ -1711,7 +1898,7 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
       } else if (
         input.startsWith("/") &&
         !input.includes(" ") &&
-        !["/exit", "/quit", "/clear", "/connect", "/help", "/status", "/doctor", "/policy", "/context", "/rao", "/pm", "/model", "/notes", "/mode", "/provider"].includes(input.toLowerCase())
+        !["/exit", "/quit", "/clear", "/connect", "/help", "/status", "/doctor", "/policy", "/context", "/rao", "/pm", "/model", "/notes", "/thinking", "/timing", "/mode", "/provider"].includes(input.toLowerCase())
       ) {
         const selection = await commandPalette(input.slice(1));
         if (!selection) {
@@ -1722,6 +1909,8 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
       }
 
       if (!input) continue;
+
+      step("understanding", "task parsed");
 
       const routed = routeIntent(input);
       if (routed) {
@@ -2227,6 +2416,48 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
             statusDirty = true;
             continue;
 
+          case "thinking":
+            {
+              if (!param || param === "show") {
+                const cfg = thinkingPolicy(ui.thinkingMode)
+                console.log(`Thinking mode: ${ui.thinkingMode}`)
+                console.log(`Caps: phases=${cfg.phases} steps=${cfg.steps} tools=${cfg.show_tools} gates=${cfg.show_gates} timings=${cfg.show_timing}`)
+                const panel = renderThinkingPanel(buildThinkingView(bus.list(), ui.thinkingMode))
+                if (panel) console.log(panel)
+                continue
+              }
+              if (param === "reset") {
+                bus.clear()
+                rendered = new Set()
+                enter("understanding")
+                console.log("Thinking panel reset.")
+                continue
+              }
+              if (!isThinkingMode(param)) {
+                console.log("Usage: /thinking <minimal|verbose|off|show|reset>")
+                continue
+              }
+              overrideMode = param
+              syncThinkingMode(provider.name)
+              console.log(`Thinking mode set to ${ui.thinkingMode}.`)
+              statusDirty = true
+            }
+            continue;
+
+          case "timing":
+            if (param === "on") {
+              timing = true
+              console.log("Timing telemetry enabled.")
+              continue
+            }
+            if (param === "off") {
+              timing = false
+              console.log("Timing telemetry disabled.")
+              continue
+            }
+            console.log("Usage: /timing <on|off>")
+            continue;
+
           case "notes":
             const notes = agent.getWorkNotes();
             if (notes) {
@@ -2433,6 +2664,7 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
                 // @ts-ignore
                 if (notes && agent.setWorkNotes) agent.setWorkNotes(notes);
 
+                syncThinkingMode(provider.name)
                 console.log(`✅ Switched to ${provider.name}`);
                 statusDirty = true;
               } catch (e) {
@@ -2469,38 +2701,73 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
           }
 
           if (!looksTaskLike(input)) {
-            // Keep early interaction conversational; don't force planning artifacts.
-            // Stream when provider supports it for lower perceived latency.
             setState(ui, "running")
+            step("discovery", "scanning src/agent")
+            step("analysis", "drafting reply")
             if (agent.canStream()) {
               if (UI_DENSE) {
-                console.log(`\n${accent(bold(ASSISTANT_NAME))}`);
+                console.log(`\n${accent(bold(ASSISTANT_NAME))}`)
               } else {
-                console.log(`\n${dim("┌")} ${accent(bold(ASSISTANT_NAME))}`);
+                console.log(`\n${dim("┌")} ${accent(bold(ASSISTANT_NAME))}`)
               }
-              let sawChunk = false;
-              const stopThinking = startDaxSpinner("orchestrating response...");
+              let sawChunk = false
+              let fallbackMode = false
+              const stopThinking = startDaxSpinner("orchestrating response...")
+              const streamView = createLiveRichRenderer()
               await agent.chatStream(input, (chunk) => {
                 if (!sawChunk) {
-                  stopThinking();
-                  sawChunk = true;
+                  stopThinking()
+                  sawChunk = true
+                  if (!fallbackMode) step("execution", "stream connected")
                 }
-                process.stdout.write(chunk);
-              });
-              if (!sawChunk) {
-                stopThinking();
-              }
-              process.stdout.write(UI_DENSE ? "\n\n" : `\n${dim("└")}\n\n`);
+                streamView.write(chunk)
+              }, {
+                firstTokenTimeoutMs: 8000,
+                overallTimeoutMs: 45000,
+                onTimeout: () => {
+                  step("execution", "stream timeout")
+                },
+                onFallback: () => {
+                  fallbackMode = true
+                  step("execution", "fallback to complete")
+                },
+              })
+              if (sawChunk) streamView.end()
+              if (!sawChunk) stopThinking()
+              if (sawChunk) process.stdout.write("\n")
+              process.stdout.write(UI_DENSE ? "\n\n" : `\n${dim("└")}\n\n`)
             } else {
-              await withSpinner("Thinking...", async () => {
-                await agent.chat(input);
-              });
+              await withSpinner("Responding...", async () => {
+                await agent.chat(input)
+              })
             }
+            step("complete", "reply ready")
           } else {
             setState(ui, "planning")
+            step("discovery", "building context")
+            if (ui.thinkingMode === "verbose" && shouldStreamPlanPrefight(provider.name) && agent.canStream() && agent.streamPlanningThought) {
+              const preStart = Date.now()
+              let firstTokenMs = -1
+              await agent.streamPlanningThought(input, () => {
+                if (firstTokenMs >= 0) return
+                firstTokenMs = Date.now() - preStart
+                step("planning", "preflight ready")
+              }, {
+                firstTokenTimeoutMs: 2000,
+                overallTimeoutMs: 9000,
+              })
+              const preMs = Date.now() - preStart
+              if (firstTokenMs < 0) step("planning", "preflight skipped (timeout)")
+              if (timing) emit({ type: "timing", ts: Date.now(), phase: "planning", stage: "preflight", duration_ms: preMs, first_token_ms: firstTokenMs >= 0 ? firstTokenMs : undefined })
+            }
+            step("planning", "drafting plan")
+            const noteStart = Date.now()
             await withSpinner("Planning...", async () => {
-              await agent.startTask(input);
-            });
+              await agent.startTask(input)
+            })
+            const noteMs = Date.now() - noteStart
+            step("planning", `work notes created (${noteMs}ms)`)
+            if (timing) emit({ type: "timing", ts: Date.now(), phase: "planning", stage: "work_notes", duration_ms: noteMs })
           }
 
           const notes = agent.getWorkNotes();
@@ -2511,13 +2778,17 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
           }
         } else {
           setState(ui, "running")
+          step("discovery", "building context")
+          step("execution", "follow-up queued")
           await withSpinner("Running...", async () => {
             await agent.sendMessage(input);
           });
+          step("complete", "update ready")
         }
 
         const pending = agent.getPendingGate?.()
         if (pending) {
+          gateTelemetry(pending)
           setGate(ui, pending)
           setState(ui, "waiting_approval")
           statusDirty = true
