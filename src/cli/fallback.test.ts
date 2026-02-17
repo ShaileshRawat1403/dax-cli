@@ -8,7 +8,7 @@ describe("resolveFallbackProvider", () => {
       "OpenAI API Error: 502 - SUBSCRIPTION_UPSTREAM_AUTH_FAILED",
       { codex: true, gemini_cli: true, claude_cli: true },
     )
-    expect(next).toBe("chatgpt-codex")
+    expect(next?.value).toBe("chatgpt-codex")
   })
 
   test("falls back to gemini-cli when codex unavailable", () => {
@@ -17,7 +17,7 @@ describe("resolveFallbackProvider", () => {
       "invalid subscription token",
       { codex: false, gemini_cli: true, claude_cli: true },
     )
-    expect(next).toBe("gemini-cli")
+    expect(next?.value).toBe("gemini-cli")
   })
 
   test("returns null when no fallback available", () => {
@@ -26,6 +26,6 @@ describe("resolveFallbackProvider", () => {
       "SUBSCRIPTION_UPSTREAM_AUTH_FAILED",
       { codex: false, gemini_cli: false, claude_cli: false },
     )
-    expect(next).toBeNull()
+    expect(next?.value).toBeNull()
   })
 })

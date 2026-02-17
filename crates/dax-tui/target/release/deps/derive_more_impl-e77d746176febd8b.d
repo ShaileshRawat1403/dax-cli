@@ -1,0 +1,9 @@
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/derive_more_impl-e77d746176febd8b.d: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/utils.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/is_variant.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../README.md /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../doc/is_variant.md
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/libderive_more_impl-e77d746176febd8b.dylib: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/utils.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/is_variant.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../README.md /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../doc/is_variant.md
+
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/lib.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/utils.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/is_variant.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../README.md:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/derive_more-impl-2.1.1/src/../doc/is_variant.md:

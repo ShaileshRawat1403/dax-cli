@@ -1,0 +1,11 @@
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/debug/deps/quote-d56a29a3a210161b.d: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/debug/deps/libquote-d56a29a3a210161b.rmeta: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs
+
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/lib.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ext.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/format.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/ident_fragment.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/to_tokens.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/runtime.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quote-1.0.44/src/spanned.rs:

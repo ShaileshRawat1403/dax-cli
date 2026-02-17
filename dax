@@ -1,0 +1,36 @@
+#!/bin/bash
+# DAX - Easy Launcher
+
+case "$1" in
+  -h|--help|"")
+    echo "🧠 DAX - Easy Launcher"
+    echo ""
+    echo "Usage: ./dax [mode] [options]"
+    echo ""
+    echo "Modes:"
+    echo "  cli       - Non-interactive (one task)"
+    echo "  i, interactive - Interactive chat mode"
+    echo "  tui       - TUI mode (requires real terminal)"
+    echo ""
+    echo "Examples:"
+    echo "  ./dax cli -p gemini-cli \"fix the auth bug\""
+    echo "  ./dax i -p gemini-cli"
+    echo "  ./dax tui -p gemini-cli"
+    echo ""
+    ;;
+  cli)
+    shift
+    bun src/cli/main.ts "$@"
+    ;;
+  i|interactive)
+    shift
+    bun src/cli/main.ts -i "$@"
+    ;;
+  tui)
+    shift
+    bun src/cli/main.ts --tui "$@"
+    ;;
+  *)
+    bun src/cli/main.ts "$@"
+    ;;
+esac

@@ -22,7 +22,8 @@ import { GeminiProvider } from "../agent/gemini.js";
 import { CodexProvider } from "../agent/codex.js";
 import { GeminiCliProvider } from "../agent/gemini-cli.js";
 import { ClaudeCliProvider } from "../agent/claude-cli.js";
-import { resolveFallbackProvider } from "./fallback.js";
+import { resolveFallbackProvider, resolveFallbackModel } from "./fallback.js";
+import { createOpenCodeStreamRenderer } from "./stream-renderer.js";
 import { isPolicyName, policyConfig, type PolicyName } from "./policy.js";
 import {
   clearGate,
@@ -44,6 +45,7 @@ import { getScopeTracker } from "../tools/validation.js";
 import type { ToolCall } from "../llm/types.js";
 import { initDb } from "../db/index.js";
 import { diffKeys, formatPMEventRow, redacted, safeJsonPreview } from "../pm/format.js";
+import { createTUIBackend } from "./tui/index.js";
 
 interface CLIOptions {
   mode: "build" | "plan";
@@ -52,6 +54,8 @@ interface CLIOptions {
   workDir: string;
   task?: string;
   interactive: boolean;
+  tui: boolean;
+  tuiBackend?: "ratatui" | "blessed";
   local: boolean;
   listModels: boolean;
 }
@@ -97,8 +101,29 @@ function isThinkingMode(value: string): value is ThinkingMode {
 }
 
 function defaultThinkingMode(providerName: string): ThinkingMode {
-  if (providerName === "gemini" || providerName === "gemini-cli") return "minimal";
-  return "verbose";
+  return "minimal";
+}
+
+function extractCleanError(error: string): string {
+  if (error.includes("TerminalQuotaError")) {
+    const match = error.match(/TerminalQuotaError:\s*(.+?)(?:\n|$)/);
+    if (match) return `Quota exceeded: ${match[1].trim()}`;
+  }
+  
+  if (error.includes("You have exhausted")) {
+    const match = error.match(/You have exhausted.*?Your quota will reset after ([^.]+)/);
+    if (match) return `Quota exhausted. Resets in ${match[1]}`;
+  }
+  
+  if (error.includes("Loaded cached credentials")) {
+    return "Auth token expired. Run /connect to refresh";
+  }
+  
+  // Extract first meaningful line
+  const lines = error.split("\n").filter(l => l.trim() && !l.includes("at "));
+  if (lines.length > 0) return lines[0].substring(0, 100);
+  
+  return error.substring(0, 100);
 }
 
 function providerNames() {
@@ -585,6 +610,14 @@ function parseCliArgs(): CLIOptions {
         default: false,
         short: "i",
       },
+      tui: {
+        type: "boolean",
+        default: false,
+        short: "t",
+      },
+      "tui-backend": {
+        type: "string",
+      },
       local: {
         type: "boolean",
         default: false,
@@ -620,6 +653,8 @@ function parseCliArgs(): CLIOptions {
     workDir: resolve(values.dir as string),
     task: positionals.join(" ") || undefined,
     interactive: values.interactive as boolean,
+    tui: values.tui as boolean,
+    tuiBackend: values["tui-backend"] as "ratatui" | "blessed" | undefined,
     local: values.local as boolean,
     listModels: values["list-models"] as boolean,
   };
@@ -637,6 +672,8 @@ Options:
   -M, --model <name>          Model name (e.g., gpt-4, phi3:mini-128k)
   -d, --dir <path>            Working directory (default: current)
   -i, --interactive           Interactive mode
+  -t, --tui                   TUI mode (terminal UI)
+  --tui-backend <ratatui|blessed>  TUI backend (default: blessed)
   -l, --local                 Force local model (Phi3)
   --list-models               List available local models
   -h, --help                  Show this help
@@ -745,8 +782,25 @@ async function getProvider(options: CLIOptions) {
     return createProvider("phi3", { model: "phi3:mini-128k" });
   }
 
-  // Auto-detect
+  // Auto-detect - prioritize CLI providers for REAL streaming
   if (options.provider === "auto") {
+    // Check CLI adapters FIRST (they have real streaming)
+    const [codexReady, geminiCli, claudeCli] = await Promise.all([
+      hasCodex() ? codexLoginStatus() : Promise.resolve(false),
+      geminiCliStatus(),
+      claudeCliStatus(),
+    ]);
+    if (codexReady) {
+      return new CodexProvider({ model: options.model });
+    }
+    if (geminiCli.ready) {
+      return new GeminiCliProvider({ model: options.model });
+    }
+    if (claudeCli.ready) {
+      return new ClaudeCliProvider({ model: options.model });
+    }
+    
+    // Fall back to API-based providers (may have fake streaming)
     const subscriptionToken = (process.env.CHATGPT_SUBSCRIPTION_TOKEN || "").trim();
     if (subscriptionToken) {
       return new ChatGPTProvider({
@@ -772,22 +826,6 @@ async function getProvider(options: CLIOptions) {
         accessToken: gemini.accessToken,
         model: options.model,
       });
-    }
-
-    // Probe CLI adapters only when fast env-based providers are unavailable.
-    const [codexReady, geminiCli, claudeCli] = await Promise.all([
-      hasCodex() ? codexLoginStatus() : Promise.resolve(false),
-      geminiCliStatus(),
-      claudeCliStatus(),
-    ]);
-    if (codexReady) {
-      return new CodexProvider({ model: options.model });
-    }
-    if (geminiCli.ready) {
-      return new GeminiCliProvider({ model: options.model });
-    }
-    if (claudeCli.ready) {
-      return new ClaudeCliProvider({ model: options.model });
     }
 
     return getDefaultProvider();
@@ -1344,12 +1382,9 @@ function printCommandHelp() {
   console.log(`  ${kbd("/doctor")}       Run provider preflight diagnostics`);
   console.log(`  ${kbd("/policy <safe|balanced|aggressive>")} Set orchestration policy`);
   console.log(`  ${kbd("/context")}      Show current task/scope context`);
-  console.log(`  ${kbd("/rao [--json|clear|replay [n]|replay --json [n]|purge [--yes]]")} Show Run/Audit/Override status`);
-  console.log(`  ${kbd("/pm undo")}      Undo last PM policy/config change`);
-  console.log(`  ${kbd("/pm history [n]")} Show recent PM events`);
-  console.log(`  ${kbd("/pm show <id>")}   Show PM event details`);
-  console.log(`  ${kbd("/clear")}`);
-  console.log(`  ${kbd("/exit")}`);
+  console.log(`  ${kbd("/reload")}       Restart agent without closing CLI`);
+  console.log(`  ${kbd("/clear")}        Clear screen`);
+  console.log(`  ${kbd("/exit")}          Exit CLI`);
   if (ORCHESTRATOR_ONLY) {
     console.log(`\n${warn("Orchestrator-only mode is enabled")} (${kbd("DAX_ORCHESTRATOR_ONLY=true (legacy COGNITO_ORCHESTRATOR_ONLY=true)")}).`);
   }
@@ -1557,8 +1592,8 @@ async function printContext(
 }
 
 function renderError(text: string) {
-  console.log(`${err("Error:")} ${text}`);
-  console.log(`${warn("⚠")} Session is still active. Use ${kbd("/connect")} or ${kbd("/provider")} to fix auth and continue.`);
+  const clean = extractCleanError(text);
+  console.log(`${err("Error:")} ${clean}`);
 }
 
 function isGreeting(text: string) {
@@ -1660,6 +1695,267 @@ async function providerPicker() {
   return await showMenu([...choices.map((row) => ({ label: row.label, value: row.value })), { label: "🔙 Back", value: null }]);
 }
 
+async function runTUIMode(options: CLIOptions, trace?: (phase: string) => void) {
+  setState(ui, "idle");
+  clearGate(ui);
+
+  let provider = await getProvider(options);
+
+  console.log(`Starting DAX TUI (${options.tuiBackend || "auto"} backend)`);
+  console.log(`Provider: ${provider.name}`);
+  console.log("Press Ctrl+C to exit\n");
+
+  const tui = createTUIBackend({
+    type: options.tuiBackend,
+    devMode: !options.tuiBackend,
+  });
+
+  const tools = options.local || provider.name === "ollama"
+    ? createLocalRegistry()
+    : createToolRegistry();
+
+  let agent = createAgent({
+    name: "DAX",
+    mode: options.mode,
+    provider,
+    tools,
+    workDir: options.workDir,
+    llmConfig: policyConfig(policy, options.model),
+  });
+
+  tui.dispatch({
+    type: "meta",
+    timestamp: Date.now(),
+    data: { provider: provider.name, model: options.model || activeModel(options, provider.name) },
+  });
+
+  tui.setContext({
+    files: ["src/cli/main.ts", "src/agent/core.ts", "src/agent/gemini-cli.ts"],
+    scope: [options.workDir],
+  });
+
+  const timeoutFor = () => {
+    if (provider.name === "gemini" || provider.name === "gemini-cli") {
+      return { first: 20000, overall: 120000 };
+    }
+    return { first: 8000, overall: 45000 };
+  };
+
+  tui.setSendHandler(async (message: string) => {
+    const input = message.trim();
+    if (!input) return;
+
+    tui.addUserMessage(input);
+    tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "request_sent" } });
+    tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "awaiting_first_token" } });
+
+    if (isGreeting(input)) {
+      tui.dispatch({
+        type: "text_delta",
+        timestamp: Date.now(),
+        data: { text: "Hi. Ready when you are. Tell me what you want to build, fix, or review." },
+      });
+      tui.dispatch({ type: "complete", timestamp: Date.now(), data: {} });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "done" } });
+      return;
+    }
+
+    let gotFirst = false;
+    const timeout = timeoutFor();
+
+    try {
+      if (agent.canStream()) {
+        await agent.chatStream(input, (chunk) => {
+          if (!gotFirst) {
+            gotFirst = true;
+            tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+          }
+          tui.dispatch({ type: "text_delta", timestamp: Date.now(), data: { text: chunk } });
+        }, {
+          firstTokenTimeoutMs: timeout.first,
+          overallTimeoutMs: timeout.overall,
+          onFallback: () => {
+            if (!gotFirst) {
+              tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+            }
+          },
+        });
+      } else {
+        await agent.chat(input);
+        const conversation = agent.getConversation();
+        const last = conversation[conversation.length - 1];
+        if (last?.role === "assistant" && last.content) {
+          tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+          tui.dispatch({ type: "text_delta", timestamp: Date.now(), data: { text: last.content } });
+        }
+      }
+
+      tui.dispatch({ type: "complete", timestamp: Date.now(), data: {} });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "done" } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      tui.dispatch({
+        type: "error",
+        timestamp: Date.now(),
+        data: { error: { code: "stream_error", message, recoverable: true } },
+      });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "error" } });
+    }
+  });
+
+  tui.setCommandHandler(async (cmd) => {
+    const input = cmd.trim();
+    if (!input) return;
+
+    const reply = (text: string) => {
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+      tui.dispatch({ type: "text_delta", timestamp: Date.now(), data: { text } });
+      tui.dispatch({ type: "complete", timestamp: Date.now(), data: {} });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "done" } });
+    };
+
+    const rebuild = async () => {
+      const history = agent.getConversation();
+      const notes = agent.getWorkNotes();
+      agent = createAgent({
+        name: "DAX",
+        mode: options.mode,
+        provider,
+        tools,
+        workDir: options.workDir,
+        llmConfig: policyConfig(policy, options.model),
+      });
+      if (history && agent.loadHistory) agent.loadHistory(history);
+      if (notes && agent.setWorkNotes) agent.setWorkNotes(notes);
+      tui.dispatch({
+        type: "meta",
+        timestamp: Date.now(),
+        data: { provider: provider.name, model: options.model || activeModel(options, provider.name) },
+      });
+    };
+
+    tui.addUserMessage(input);
+
+    if (input === "/quit" || input === "/exit") {
+      tui.destroy();
+      process.exit(0);
+    }
+
+    if (input === "/help") {
+      reply("Commands: /help, /status, /provider <name>, /mode <build|plan>, /model <id>, /clear, /exit");
+      return;
+    }
+
+    if (input === "/status") {
+      reply("Provider: " + provider.name + "\nMode: " + options.mode + "\nModel: " + (options.model || activeModel(options, provider.name)) + "\nState: ready");
+      return;
+    }
+
+    if (input === "/clear") {
+      reply("Clear in TUI keeps history for now. Use Ctrl+L in terminal if you want a visual clear.");
+      return;
+    }
+
+    if (input.startsWith("/provider ")) {
+      const nextProvider = input.slice("/provider ".length).trim();
+      if (!nextProvider) {
+        reply("Usage: /provider <name>");
+        return;
+      }
+      options.provider = nextProvider;
+      provider = await getProvider(options);
+      await rebuild();
+      reply("Switched provider to " + provider.name);
+      return;
+    }
+
+    if (input.startsWith("/mode ")) {
+      const nextMode = input.slice("/mode ".length).trim();
+      if (nextMode !== "build" && nextMode !== "plan") {
+        reply("Usage: /mode <build|plan>");
+        return;
+      }
+      options.mode = nextMode;
+      await rebuild();
+      reply("Switched mode to " + options.mode);
+      return;
+    }
+
+    if (input.startsWith("/model ")) {
+      const nextModel = input.slice("/model ".length).trim();
+      if (!nextModel) {
+        reply("Usage: /model <name>");
+        return;
+      }
+      options.model = nextModel;
+      await rebuild();
+      reply("Switched model to " + nextModel);
+      return;
+    }
+
+    if (input.startsWith("/thinking") || input.startsWith("/timing")) {
+      reply("Thinking/timing controls are available in interactive CLI. TUI support is partial.");
+      return;
+    }
+
+    let gotFirst = false;
+    const timeout = timeoutFor();
+
+    try {
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "request_sent" } });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "awaiting_first_token" } });
+      if (agent.canStream()) {
+        await agent.chatStream(input, (chunk) => {
+          if (!gotFirst) {
+            gotFirst = true;
+            tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+          }
+          tui.dispatch({ type: "text_delta", timestamp: Date.now(), data: { text: chunk } });
+        }, {
+          firstTokenTimeoutMs: timeout.first,
+          overallTimeoutMs: timeout.overall,
+          onFallback: () => {
+            if (!gotFirst) {
+              tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+            }
+          },
+        });
+      } else {
+        await agent.chat(input);
+        const conversation = agent.getConversation();
+        const last = conversation[conversation.length - 1];
+        if (last?.role === "assistant" && last.content) {
+          tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "streaming" } });
+          tui.dispatch({ type: "text_delta", timestamp: Date.now(), data: { text: last.content } });
+        }
+      }
+      tui.dispatch({ type: "complete", timestamp: Date.now(), data: {} });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "done" } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      tui.dispatch({
+        type: "error",
+        timestamp: Date.now(),
+        data: { error: { code: "command_error", message, recoverable: true } },
+      });
+      tui.dispatch({ type: "state", timestamp: Date.now(), data: { state: "error" } });
+    }
+  });
+
+  tui.focusInput();
+  trace?.("tui ready");
+
+  process.on("SIGINT", () => {
+    tui.destroy();
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", () => {
+    tui.destroy();
+    process.exit(0);
+  });
+}
+
 async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
   setState(ui, "idle")
   clearGate(ui)
@@ -1673,16 +1969,18 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
     }
   }
 
+  let provider = await getProvider(options);
+  
   if (UI_DENSE) {
-    console.log(`🧠 DAX Agent • mode:${options.mode} • dir:${options.workDir}`);
+    console.log(`🧠 DAX • ${options.mode} • ${provider.name} • ${options.workDir}`);
   } else {
     console.log(`🧠 DAX Agent
    Mode: ${options.mode}
+   Provider: ${provider.name}
+   Model: ${options.model || "default"}
    Directory: ${options.workDir}\n`);
   }
   trace?.("banner");
-
-  let provider = await getProvider(options);
   trace?.("provider resolved");
   console.log(`Using provider: ${provider.name}${UI_DENSE ? "" : "\n"}`);
 
@@ -1931,6 +2229,29 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
 
           case "clear":
             console.clear();
+            statusDirty = true;
+            continue;
+
+          case "reload":
+          case "restart":
+            console.log("🔄 Reloading DAX...");
+            // Re-initialize agent
+            provider = await getProvider(options);
+            agent = createAgent({
+              name: "DAX",
+              mode: options.mode,
+              provider,
+              tools,
+              workDir: options.workDir,
+              llmConfig: policyConfig(policy, options.model),
+            });
+            console.clear();
+            console.log(`🧠 DAX Agent (Reloaded)
+   Mode: ${options.mode}
+   Provider: ${provider.name}
+   Directory: ${options.workDir}\n`);
+            setState(ui, "idle");
+            clearGate(ui);
             statusDirty = true;
             continue;
 
@@ -2823,25 +3144,81 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
         setState(ui, "idle")
         await recordProvider(provider.name, "ok");
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const rawError = error instanceof Error ? error.message : String(error);
+        const cleanError = extractCleanError(rawError);
         setState(ui, "error")
         await recordProvider(provider.name, "err");
-        {
-          const fallback = resolveFallbackProvider(
+        
+        // Try fallback models FIRST, then providers
+        const maxRetries = 2;
+        let retryCount = 0;
+        let lastError = cleanError;
+        
+        while (retryCount < maxRetries) {
+          // First: Try different model in same provider
+          const currentModel = options.model || activeModel(options, provider.name);
+          const fallbackModel = resolveFallbackModel(provider.name, currentModel);
+          
+          if (fallbackModel && fallbackModel !== currentModel) {
+            console.log(`🔄 ${currentModel} quota exceeded. Trying ${fallbackModel}...`);
+            
+            options.model = fallbackModel;
+            if (provider.name === "gemini-cli") {
+              process.env.GEMINI_CLI_MODEL = fallbackModel;
+            } else if (provider.name === "claude-cli") {
+              process.env.CLAUDE_CLI_MODEL = fallbackModel;
+            }
+            
+            provider = await getProvider(options);
+            agent = createAgent({
+              name: "DAX",
+              mode: options.mode,
+              provider,
+              tools,
+              workDir: options.workDir,
+              llmConfig: policyConfig(policy, options.model),
+            });
+            
+            retryCount++;
+            
+            // Retry with new model
+            try {
+              if (agent.canStream()) {
+                const streamView = createOpenCodeStreamRenderer();
+                await agent.chatStream(input, (chunk) => streamView.write(chunk));
+                streamView.end();
+              } else {
+                await agent.chat(input);
+              }
+              setState(ui, "idle");
+              await recordProvider(provider.name, "ok");
+              break;
+            } catch (modelError) {
+              lastError = modelError instanceof Error ? modelError.message : String(modelError);
+              continue;
+            }
+          }
+          
+          // Second: Try different provider
+          const fallbackResult = resolveFallbackProvider(
             provider.name,
-            message,
+            lastError,
             {
               codex: hasCodex() && (await codexLoginStatus()),
               gemini_cli: (await geminiCliStatus()).ready,
               claude_cli: (await claudeCliStatus()).ready,
             },
           );
-          if (fallback) {
+          
+          if (fallbackResult?.value) {
+            console.log(`🔄 ${provider.name} failed: ${cleanError}`);
+            console.log(`✅ Switching to ${fallbackResult.value}...`);
+            
             const failedProvider = provider.name;
             const history = agent.getConversation();
             const notes = agent.getWorkNotes();
             options.local = false;
-            options.provider = fallback;
+            options.provider = fallbackResult.value;
             provider = await getProvider(options);
             agent = createAgent({
               name: "DAX",
@@ -2853,17 +3230,33 @@ async function runTask(options: CLIOptions, trace?: (phase: string) => void) {
             });
             if (history && agent.loadHistory) agent.loadHistory(history);
             if (notes && agent.setWorkNotes) agent.setWorkNotes(notes);
-            console.log(
-              `${warn("⚠")} Provider error detected. Auto-switched to ${kbd(fallback)} and retrying.`,
-            );
+            
             await recordProvider(failedProvider, "fallback");
             setState(ui, "idle")
             statusDirty = true;
-            pendingInput = input;
-            continue;
+            retryCount++;
+            
+            // Retry with new provider
+            try {
+              if (agent.canStream()) {
+                const streamView = createOpenCodeStreamRenderer();
+                await agent.chatStream(input, (chunk) => streamView.write(chunk));
+                streamView.end();
+              } else {
+                await agent.chat(input);
+              }
+              setState(ui, "idle");
+              await recordProvider(provider.name, "ok");
+              break;
+            } catch (providerError) {
+              lastError = providerError instanceof Error ? providerError.message : String(providerError);
+              continue;
+            }
           }
+          break;
         }
-        renderError(message);
+        
+        console.log(`${err("Error:")} ${cleanError}`);
       }
     }
   } else {
@@ -2952,6 +3345,11 @@ async function main() {
     if (options.listModels) {
       await listLocalModels();
       trace("list models done");
+      return;
+    }
+
+    if (options.tui) {
+      await runTUIMode(options, trace);
       return;
     }
 

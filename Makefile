@@ -1,7 +1,7 @@
 # DAX Makefile
 # Easy commands for common tasks
 
-.PHONY: help install dev api web cli stop test clean
+.PHONY: help install dev api web cli cli-tui stop test clean
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make api        - Start API server only"
 	@echo "  make web        - Start Web UI only"
 	@echo "  make cli        - Run CLI (use CLI_ARGS='your task')"
+	@echo "  make cli-tui    - Start TUI mode (set TUI_BACKEND=ratatui|blessed)"
 	@echo "  make stop       - Stop all running servers"
 	@echo "  make test       - Run tests"
 	@echo "  make clean      - Clean build files and dependencies"
@@ -51,6 +52,11 @@ cli:
 	fi
 	@echo "🤖 Running CLI..."
 	bun src/cli/main.ts $(CLI_ARGS)
+
+# TUI CLI
+cli-tui:
+	@echo "🖥️  Starting DAX TUI..."
+	bun src/cli/main.ts --tui --tui-backend $${TUI_BACKEND:-blessed}
 
 # Interactive CLI
 cli-interactive:

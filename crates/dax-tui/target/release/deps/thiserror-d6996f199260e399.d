@@ -1,0 +1,14 @@
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/thiserror-d6996f199260e399.d: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/thiserror-92eb6de257a0248b/out/private.rs
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/libthiserror-d6996f199260e399.rlib: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/thiserror-92eb6de257a0248b/out/private.rs
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/libthiserror-d6996f199260e399.rmeta: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/thiserror-92eb6de257a0248b/out/private.rs
+
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/thiserror-92eb6de257a0248b/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/thiserror-92eb6de257a0248b/out

@@ -1,0 +1,14 @@
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/serde-7f50bd2bd7a56cff.d: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/serde-7024484620ca633b/out/private.rs
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/libserde-7f50bd2bd7a56cff.rlib: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/serde-7024484620ca633b/out/private.rs
+
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/deps/libserde-7f50bd2bd7a56cff.rmeta: /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/serde-7024484620ca633b/out/private.rs
+
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/ananyalayek/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/serde-7024484620ca633b/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/Shailesh/MYAIAGENTS/dax-cli/crates/dax-tui/target/release/build/serde-7024484620ca633b/out

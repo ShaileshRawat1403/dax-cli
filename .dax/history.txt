@@ -1,35 +1,135 @@
-hello DAX
-hi DAX
-/connect
-dont know why
-i am
+/reload
+/se
 hi
+g
+/set
+/m
+reiew the repo
+/connect
+hello
+/build
+plan
+/mode
+what happened?
+hello dax
+y
+/
+/provider
+yes
+review my repo
+/r
+will you respond?
+This is very bad
+continue please, finsish the task
+please diagnise what is causing this behaviour
+I asked yiu to do a task, whay are you not responding?
+What are yiu doing?
+i want to check the stream experience for this cli dax
+i am ready
+why are you not respondinh?
+I want to check if the stream is working fine and testimg it
+is the command still runniung, if it is, the use should see, i also still dont see smooth streaming if this response
+go ahead
+hey dax, i want to test the stream for ths repo
+i am
+i i am
+/c
+go
+why are you not completing the task?
+yes look atthe files
+what next?
+i want to test the stream
+whay re you not respomding?
+hey
+hello?
+Why are you not responmdonh?
+What happened?
+explore it
+i want to know about this project and are there any weaknesses?
+i dax
+what does this mean
+i am dax
+why are you not responfing?
+i was just greeting you
+/p
+why do you need the list if files, dont you have any acess to the repo?
+what do you ned?
+please proceed
+yes this looks a good plan
+i want my dax-cli stream to be consitent for all provides and models. right now it siddenly breaks and dosenst stream smoothly
+i want to check the model stream
+gemini-2.5
+sw
+/mo
+/doctor
+hi dax
+are you able to read?
+yes rea this file
+you have the files in this repo, read them
+give the update
+ready
+contibue
+i want the streaming ti be interactive, sothat the user is engaed, noit like dumoing the entire tokens all at onece
+hi dax, help me fix the streaming, its not smooth
+/plan
+awitch to plan mode
+iam
+read
+yes, now dont ask me more and read, review and report. dont ask anything before that
+yes read them all and come uo with a final report
+what files do you need you have acess to the repo itself
+give update
+i want you to review and give feedback in the chat stream in cli mode
+could you shift to plan mode
+hi, i want to check my stream performace as it gets hung after sometimw
+build
+hello, how are you?
+and
+i want to enhance the streaming experiecne for my dax cli
+what?
+i am now
+/model --list
+do i need Create OAuth client ID
+why gemini cli streaming is failiing do i need an Oauth?
+i cant choose models with /model-list in dax-cli, check if the arrows kets are assighned for navigation.
+switch to different model
+continue
+safer defaults:
+Good. Let’s slow this down and evaluate the proposal properly before you paste those changes in.
+please provide the update.
+work in this plan
+hi DAX i want to fix stream timeout for this TUI
+i want to fix stream timeout
+?
+n
+i want to check the TUI UI and UX
+hello DAX
+whay happened?
+is the streaming fioxed now for gemini cli?
+implemet this plan ang give a report on the bus and issues that are causimg the issue.
+Hi DAX, give me the feedback oon the plan
+give the ipdate
+yeas
+i want to fix the stream for gemini cli in dax. review and find why the stream doesnt work, also whqts the auth flow for gemini?
+i am testing
+hi DAX
+dont know why
 i am ready dax
 i want to plan the TUI for DAX
 /thinking show
 /thinking minimal
-i am dax
-hello
 why did you stop responding?
-/provider
 i am not happy with the TUI experiece. how can i enhance the UI/UX
 our first objetive is to make DAX ready to ship. right now i am struggling with implementing the stream.
 wow, you took up that very well.
-ready
 we are planning first
 i want to plan a release for my project DAX.
-yes
 help me plan the release of DAX
 i want to plan something
 ola
-i am now
-?
 whi are you
 connect to ChatGPT via Codex CLI.
 thanks
 change to plan mode
 which mode are we in?
-/c
-/
 i was saying i am ready
-y

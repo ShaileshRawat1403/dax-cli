@@ -1,20 +1,29 @@
 {
   "gemini-cli": {
-    "ok": 32,
-    "err": 0,
-    "fallback": 0,
-    "last_ok": "2026-02-16T08:07:01.042Z"
+    "ok": 44,
+    "err": 24,
+    "fallback": 2,
+    "last_ok": "2026-02-16T09:08:55.129Z",
+    "last_err": "2026-02-16T14:30:59.798Z"
   },
   "chatgpt-codex": {
     "ok": 4,
-    "err": 0,
-    "fallback": 0,
-    "last_ok": "2026-02-16T07:53:08.511Z"
+    "err": 8,
+    "fallback": 3,
+    "last_ok": "2026-02-16T07:53:08.511Z",
+    "last_err": "2026-02-16T13:23:57.082Z"
   },
   "chatgpt-plus": {
     "ok": 0,
-    "err": 1,
-    "fallback": 0,
-    "last_err": "2026-02-15T19:29:46.723Z"
+    "err": 21,
+    "fallback": 10,
+    "last_err": "2026-02-16T13:11:49.914Z"
+  },
+  "gemini": {
+    "ok": 80,
+    "err": 5,
+    "fallback": 3,
+    "last_ok": "2026-02-16T14:02:38.254Z",
+    "last_err": "2026-02-16T13:10:20.456Z"
   }
 }

@@ -60,18 +60,48 @@ function eventType(row: Record<string, unknown>) {
   return typeof type === "string" ? type : "unknown";
 }
 
+function deepText(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    const text = value.map((row) => deepText(row)).join("");
+    return text;
+  }
+  if (typeof value !== "object") return "";
+  const row = value as Record<string, unknown>;
+  if (typeof row.text === "string") return row.text;
+  if (typeof row.content === "string") return row.content;
+  const parts = deepText(row.parts);
+  if (parts) return parts;
+  const content = deepText(row.content);
+  if (content) return content;
+  const delta = deepText(row.delta);
+  if (delta) return delta;
+  const output = deepText(row.output);
+  if (output) return output;
+  const response = deepText(row.response);
+  if (response) return response;
+  return "";
+}
+
 function textFromEvent(row: Record<string, unknown>) {
   if (typeof row.text === "string") return row.text;
 
   const delta = row.delta as Record<string, unknown> | undefined;
   if (delta && typeof delta.text === "string") return delta.text;
+  const deltaText = deepText(delta);
+  if (deltaText) return deltaText;
 
   const content = row.content as Record<string, unknown> | undefined;
   if (content && typeof content.text === "string") return content.text;
+  const contentText = deepText(content);
+  if (contentText) return contentText;
 
   const message = row.message as Record<string, unknown> | undefined;
   if (message && typeof message.content === "string") return message.content;
   if (message && typeof message.text === "string") return message.text;
+  const messageText = deepText(message);
+  if (messageText) return messageText;
 
   const chunk = row.chunk as Record<string, unknown> | undefined;
   if (chunk && typeof chunk.text === "string") return chunk.text;
@@ -205,7 +235,10 @@ async function runNdjson(
         if (type === "error") {
           debugLine("event=error");
         }
-        const text = textFromEvent(row);
+        const role = typeof row.role === "string" ? row.role : "";
+        const text = type === "message" && role && role !== "assistant"
+          ? ""
+          : textFromEvent(row);
         const textLen = text.length;
         fingerprint.add(`type:${type}|keys:${keys.join(",")}`);
 
@@ -220,9 +253,7 @@ async function runNdjson(
         if (!text) return;
         const delta = text.startsWith(lastText)
           ? text.slice(lastText.length)
-          : lastText.endsWith(text)
-            ? ""
-            : text
+          : text
         if (text.startsWith(lastText) && delta) {
           debugLine("mode=suffix cumulative=1")
         }
@@ -230,11 +261,7 @@ async function runNdjson(
           sawOutput = true;
           onText(delta);
         }
-        if (text.length >= lastText.length || text.startsWith(lastText)) {
-          lastText = text;
-          return;
-        }
-        if (delta) lastText += delta;
+        lastText = text;
       });
       rl.on("close", () => resolve());
     });
